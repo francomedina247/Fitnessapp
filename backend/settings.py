@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import environ
+import dj_database_url
+from decouple import config
 
 env = environ.Env()
 environ.Env.read_env(Path(__file__).resolve().parent.parent / '.env')
@@ -112,21 +114,13 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-import os
+import dj_database_url
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DB_NAME', 'fitness'),
-        'USER': os.environ.get('DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '3306'),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        }
-    }
+    'default': dj_database_url.config(
+        default=env('DATABASE_URL'),
+        conn_max_age=600,
+    )
 }
 
 

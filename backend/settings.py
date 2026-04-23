@@ -188,9 +188,24 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ── Cache (used for OTP codes)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'fitpro_cache',
+# Cache (used for OTP + throttling).
+# Default to local memory so signup does not depend on a DB cache table.
+# To use DB cache explicitly, set CACHE_BACKEND=db and run:
+#   python manage.py createcachetable fitpro_cache
+#   python manage.py migrate
+CACHE_BACKEND = env('CACHE_BACKEND', default='locmem').lower()
+
+if CACHE_BACKEND == 'db':
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': env('CACHE_TABLE', default='fitpro_cache'),
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': env('CACHE_LOCATION', default='fitpro-cache'),
+        }
+    }

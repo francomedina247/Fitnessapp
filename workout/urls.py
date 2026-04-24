@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/',           WorkoutDetailView.as_view(), name='workout_detail'),
     path('create/',             WorkoutCreateView.as_view(), name='workout_create'),
     path('<int:pk>/update/',    WorkoutUpdateView.as_view(), name='workout_update'),
+    path('<int:pk>/partial-update/', WorkoutUpdateView.as_view(), name='workout_partial_update'),
     path('<int:pk>/delete/',    WorkoutDeleteView.as_view(), name='workout_delete'),
 
     # User data

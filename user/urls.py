@@ -14,7 +14,11 @@ from .views import (
     DeleteAccountView,
     AdminUserListView,
     AdminUserDeleteView,
+    AdminUserDetailView,
     AdminUserStatsView,
+    AdminWorkoutStatsView,
+    RegisterPushTokenView,
+    AdminSendNotificationView,
 )
 
 urlpatterns = [
@@ -32,4 +36,8 @@ urlpatterns = [
     path('admin/users/',           AdminUserListView.as_view(),      name='admin_user_list'),
     path('admin/users/stats/',     AdminUserStatsView.as_view(),     name='admin_user_stats'),
     path('admin/users/<int:pk>/delete/', AdminUserDeleteView.as_view(), name='admin_user_delete'),
+    path('admin/users/<int:pk>/',        AdminUserDetailView.as_view(),   name='admin_user_detail'),
+    path('admin/workout-stats/',         AdminWorkoutStatsView.as_view(), name='admin_workout_stats'),
+    path('push/register/',               RegisterPushTokenView.as_view(),    name='push_register'),
+    path('admin/push/send/',             AdminSendNotificationView.as_view(), name='admin_push_send'),
 ]

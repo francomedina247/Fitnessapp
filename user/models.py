@@ -30,6 +30,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     name         = models.CharField(max_length=150, blank=True, null=True)
     birthdate    = models.CharField(max_length=20, blank=True, null=True)
     is_verified  = models.BooleanField(default=False)
+    push_token   = models.CharField(max_length=200, blank=True, null=True)
 
     # ── Profile / onboarding fields ───────────────────────────────────────────
     gender               = models.CharField(max_length=10, blank=True, null=True)

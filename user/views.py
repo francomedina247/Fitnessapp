@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from workout.models import Exercise, Workout
 from .serializers import ProfileSerializer, RegisterSerializer, UserSerializer
 
 User = get_user_model()
@@ -386,6 +387,61 @@ class DeleteAccountView(APIView):
         return Response({"detail": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema(
+    request=inline_serializer("RegisterPushToken", fields={"token": drf_serializers.CharField()}),
+    responses={200: OpenApiResponse(description="Token registered")},
+)
+class RegisterPushTokenView(APIView):
+    """Store the Expo push token for the authenticated user."""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        token = request.data.get("token", "").strip()
+        if not token:
+            return Response({"detail": "Token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not token.startswith("ExponentPushToken["):
+            return Response({"detail": "Invalid Expo push token format."}, status=status.HTTP_400_BAD_REQUEST)
+        request.user.push_token = token
+        request.user.save(update_fields=["push_token"])
+        return Response({"detail": "Push token registered."}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    request=inline_serializer(
+        "AdminSendNotification",
+        fields={
+            "title": drf_serializers.CharField(),
+            "body": drf_serializers.CharField(),
+            "user_ids": drf_serializers.ListField(child=drf_serializers.IntegerField(), required=False),
+        },
+    ),
+    responses={200: OpenApiResponse(description="Notification sent")},
+)
+class AdminSendNotificationView(APIView):
+    """
+    Admin endpoint to send a push notification.
+    If user_ids is omitted or empty, broadcasts to ALL users with a push token.
+    """
+    permission_classes = (permissions.IsAdminUser,)
+
+    def post(self, request):
+        from .push import broadcast_push
+
+        title = request.data.get("title", "").strip()
+        body = request.data.get("body", "").strip()
+        user_ids = request.data.get("user_ids", [])
+
+        if not title or not body:
+            return Response({"detail": "title and body are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = User.objects.filter(push_token__isnull=False).exclude(push_token="")
+        if user_ids:
+            qs = qs.filter(id__in=user_ids)
+
+        sent = broadcast_push(list(qs), title, body)
+        return Response({"detail": f"Notification sent to {sent} device(s).", "sent": sent})
+
+
 class AdminUserListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = (permissions.IsAdminUser,)
@@ -402,6 +458,59 @@ class AdminUserDeleteView(generics.DestroyAPIView):
         return User.objects.filter(is_staff=False)
 
 
+class AdminUserDetailView(APIView):
+    permission_classes = (permissions.IsAdminUser,)
+
+    def get(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, is_staff=False)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        exercises = (
+            Exercise.objects
+            .filter(user_id=pk)
+            .select_related("workout")
+            .order_by("-date")[:50]
+        )
+
+        exercise_list = [
+            {
+                "id": e.id,
+                "workoutId": str(e.workout_id),
+                "workoutName": e.workout.name if e.workout else str(e.workout_id),
+                "date": str(e.date),
+                "duration": e.duration,
+                "caloriesBurned": e.calories_burned,
+                "notes": e.notes or "",
+            }
+            for e in exercises
+        ]
+
+        return Response({
+            "id": str(user.id),
+            "email": user.email,
+            "name": user.name or user.username or None,
+            "joinedAt": user.date_joined.isoformat(),
+            "isVerified": user.is_verified,
+            "gender": user.gender,
+            "height": user.height,
+            "weight": user.weight,
+            "age": user.age,
+            "goalWeight": user.goal_weight,
+            "weightUnit": user.weight_unit,
+            "heightUnit": user.height_unit,
+            "primaryGoal": user.primary_goal,
+            "experienceLevel": user.experience_level,
+            "weeklyWorkoutTarget": user.weekly_workout_target,
+            "bodyFat": user.body_fat,
+            "restingHeartRate": user.resting_heart_rate,
+            "sleepHours": user.sleep_hours,
+            "bio": user.bio,
+            "recentExercises": exercise_list,
+        })
+
+
 def _compute_streak(active_dates: set) -> int:
     """Count consecutive days ending today (or yesterday) that have activity."""
 
@@ -413,7 +522,89 @@ def _compute_streak(active_dates: set) -> int:
     return streak
 
 
-@extend_schema(responses={200: OpenApiResponse(description="List of user stats")})
+STREAK_MILESTONES = {3, 7, 14, 30, 60, 100}
+
+
+def maybe_send_streak_email(user) -> None:
+    """Send a congratulatory email if the user just hit a streak milestone."""
+    from workout.models import Exercise
+
+    active_dates = set(
+        Exercise.objects.filter(user=user).values_list("date", flat=True)
+    )
+    streak = _compute_streak(active_dates)
+    if streak not in STREAK_MILESTONES:
+        return
+
+    try:
+        from_email = _resolve_from_email()
+    except Exception:
+        return
+
+    subject = f"🔥 {streak}-Day Streak — Keep it up, {user.name or user.username}!"
+    message = (
+        f"Hi {user.name or user.username},\n\n"
+        f"You've worked out {streak} days in a row — that's incredible!\n"
+        "Keep the momentum going and crush your next session.\n\n"
+        "— The FitPro Team"
+    )
+    try:
+        send_mail(subject, message, from_email, [user.email], fail_silently=True)
+    except Exception:
+        pass
+
+
+def maybe_send_goal_email(user, new_weight: float) -> None:
+    """Send a congratulatory email if the user has reached their goal weight."""
+    if not user.goal_weight or not user.weight:
+        return
+
+    # Determine direction: losing or gaining
+    losing = user.goal_weight < user.weight
+    reached = (losing and new_weight <= user.goal_weight) or (
+        not losing and new_weight >= user.goal_weight
+    )
+    if not reached:
+        return
+
+    try:
+        from_email = _resolve_from_email()
+    except Exception:
+        return
+
+    subject = f"🏆 Goal Reached, {user.name or user.username}!"
+    message = (
+        f"Hi {user.name or user.username},\n\n"
+        f"You've hit your goal weight of {user.goal_weight} kg — amazing work!\n"
+        "Time to set your next goal and keep pushing forward.\n\n"
+        "— The FitPro Team"
+    )
+    try:
+        send_mail(subject, message, from_email, [user.email], fail_silently=True)
+    except Exception:
+        pass
+
+
+@extend_schema(responses={200: OpenApiResponse(description="Workout session counts")})
+class AdminWorkoutStatsView(APIView):
+    permission_classes = (permissions.IsAdminUser,)
+
+    def get(self, request):
+        from workout.models import Exercise
+        from django.db.models import Count
+
+        counts = (
+            Exercise.objects
+            .values("workout_id", "workout__name")
+            .annotate(total=Count("id"))
+            .order_by("-total")
+        )
+        return Response([
+            {"workoutId": str(row["workout_id"]), "workoutName": row["workout__name"], "count": row["total"]}
+            for row in counts
+        ])
+
+
 class AdminUserStatsView(APIView):
     permission_classes = (permissions.IsAdminUser,)
 

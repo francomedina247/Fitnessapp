@@ -5,7 +5,7 @@ from .models import Workout, Exercise, ProgressEntry, Measurement, PersonalRecor
 class WorkoutSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Workout
-        fields = ('id', 'name', 'description', 'duration', 'calories_burned', 'difficulty', 'video_url', 'created_by', 'created_at')
+        fields = ('id', 'name', 'description', 'duration', 'calories_burned', 'difficulty', 'category', 'video_url', 'created_by', 'created_at')
         read_only_fields = ('id', 'created_at', 'created_by')
 
 

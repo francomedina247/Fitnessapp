@@ -9,11 +9,21 @@ class Workout(models.Model):
         ('difficult',    'Difficult'),
         ('hard',         'Hard'),
     ]
+    CATEGORY_CHOICES = [
+        ('cardio',      'Cardio'),
+        ('strength',    'Strength'),
+        ('flexibility', 'Flexibility'),
+        ('hiit',        'HIIT'),
+        ('sports',      'Sports'),
+        ('recovery',    'Recovery'),
+        ('other',       'Other'),
+    ]
     name            = models.CharField(max_length=150)
     description     = models.TextField(blank=True)
     duration        = models.IntegerField(help_text='Minutes')
     calories_burned = models.IntegerField()
     difficulty      = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='intermediate')
+    category        = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     video_url       = models.URLField(blank=True, null=True)
     created_by      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_workouts')
     created_at      = models.DateTimeField(auto_now_add=True)

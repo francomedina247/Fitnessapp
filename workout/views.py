@@ -30,9 +30,17 @@ class WorkoutCreateView(generics.CreateAPIView):
 
 
 class WorkoutUpdateView(generics.UpdateAPIView):
-    queryset         = Workout.objects.all()
-    serializer_class = WorkoutSerializer
+    queryset           = Workout.objects.all()
+    serializer_class   = WorkoutSerializer
     permission_classes = (permissions.IsAdminUser,)
+    http_method_names  = ['put', 'patch']
+
+    def perform_update(self, serializer):
+        serializer.save(created_by=serializer.instance.created_by)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
 
 class WorkoutDeleteView(generics.DestroyAPIView):
@@ -51,6 +59,8 @@ class ExerciseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+        from user.views import maybe_send_streak_email
+        maybe_send_streak_email(self.request.user)
 
 
 class ExerciseUpdateView(generics.UpdateAPIView):
@@ -78,7 +88,10 @@ class ProgressListCreateView(generics.ListCreateAPIView):
         return ProgressEntry.objects.filter(user=self.request.user).order_by('-date')
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        entry = serializer.save(user=self.request.user)
+        if entry.weight:
+            from user.views import maybe_send_goal_email
+            maybe_send_goal_email(self.request.user, entry.weight)
 
 
 class ProgressUpdateView(generics.UpdateAPIView):

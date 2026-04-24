@@ -24,7 +24,10 @@ class Workout(models.Model):
     calories_burned = models.IntegerField()
     difficulty      = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='intermediate')
     category        = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
-    video_url       = models.URLField(blank=True, null=True)
+    video_url            = models.URLField(blank=True, null=True)
+    rounds               = models.IntegerField(default=1)
+    round_duration_seconds = models.IntegerField(default=30)
+    round_video_uris     = models.JSONField(default=list, blank=True)
     created_by      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_workouts')
     created_at      = models.DateTimeField(auto_now_add=True)
 

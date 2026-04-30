@@ -28,6 +28,7 @@ class Workout(models.Model):
     round_duration_seconds = models.IntegerField(default=30)
     round_video_uris     = models.JSONField(default=list, blank=True)
     step_images          = models.JSONField(default=list, blank=True)
+    instructions         = models.JSONField(default=list, blank=True, help_text='List of step-by-step instruction strings')
     created_by      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_workouts')
     created_at      = models.DateTimeField(auto_now_add=True)
 

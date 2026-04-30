@@ -6,6 +6,7 @@ class WorkoutSerializer(serializers.ModelSerializer):
     video_url = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     round_video_uris = serializers.JSONField(required=False, default=list)
     step_images = serializers.JSONField(required=False, default=list)
+    instructions = serializers.JSONField(required=False, default=list)
     rounds = serializers.IntegerField(required=False, default=1)
     round_duration_seconds = serializers.IntegerField(required=False, default=30)
     duration = serializers.FloatField()
@@ -13,7 +14,7 @@ class WorkoutSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Workout
-        fields = ('id', 'name', 'description', 'duration', 'calories_burned', 'difficulty', 'category', 'video_url', 'rounds', 'round_duration_seconds', 'round_video_uris', 'step_images', 'created_by', 'created_at')
+        fields = ('id', 'name', 'description', 'duration', 'calories_burned', 'difficulty', 'category', 'video_url', 'rounds', 'round_duration_seconds', 'round_video_uris', 'step_images', 'instructions', 'created_by', 'created_at')
         read_only_fields = ('id', 'created_at', 'created_by')
 
     def validate_video_url(self, value):

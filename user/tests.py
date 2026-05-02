@@ -42,6 +42,51 @@ class RegistrationOtpTests(APITestCase):
             "Verify your FitPro account",
         )
 
+    @patch("user.views.send_otp", return_value="123456")
+    def test_register_reuses_unverified_user_and_resends_otp(self, mocked_send_otp):
+        user = User.objects.create_user(
+            email=self.payload["email"],
+            password="Old@Password#99!",
+            username="signup_test",
+            name="Old Name",
+            birthdate="12/31/1999",
+        )
+
+        response = self.client.post(self.register_url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(User.objects.filter(email=self.payload["email"]).count(), 1)
+
+        user.refresh_from_db()
+        self.assertEqual(user.name, self.payload["name"])
+        self.assertEqual(user.birthdate, self.payload["birthdate"])
+        self.assertTrue(user.check_password(self.payload["password"]))
+        mocked_send_otp.assert_called_once_with(
+            self.payload["email"],
+            "verify",
+            "Verify your FitPro account",
+        )
+
+    @patch("user.views.send_otp", return_value="123456")
+    def test_register_rejects_existing_verified_user(self, mocked_send_otp):
+        User.objects.create_user(
+            email=self.payload["email"],
+            password=self.payload["password"],
+            username="signup_test",
+            name=self.payload["name"],
+            birthdate=self.payload["birthdate"],
+            is_verified=True,
+        )
+
+        response = self.client.post(self.register_url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "An account with this email already exists. Please sign in.",
+        )
+        mocked_send_otp.assert_not_called()
+
     def test_verify_email_marks_user_as_verified_and_login_then_succeeds(self):
         user = User.objects.create_user(
             email=self.payload["email"],

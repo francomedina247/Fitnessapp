@@ -98,13 +98,52 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = (permissions.AllowAny,)
 
+    def _update_unverified_user(self, user, serializer: RegisterSerializer):
+        validated_data = serializer.validated_data
+
+        requested_username = validated_data.get("username", "")
+        if requested_username:
+            user.username = requested_username
+        elif not user.username:
+            user.username = serializer._generate_username(
+                validated_data.get("name", user.name or ""),
+                user.email,
+            )
+
+        user.name = validated_data.get("name", user.name)
+        user.birthdate = validated_data.get("birthdate", user.birthdate)
+        user.is_verified = False
+        user.set_password(validated_data["password"])
+        user.save(
+            update_fields=[
+                "username",
+                "name",
+                "birthdate",
+                "is_verified",
+                "password",
+            ]
+        )
+        return user
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].strip().lower()
+
+        existing_user = User.objects.filter(email__iexact=email).first()
+        if existing_user and existing_user.is_verified:
+            return Response(
+                {"detail": "An account with this email already exists. Please sign in."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             with transaction.atomic():
-                user = serializer.save()
+                user = (
+                    self._update_unverified_user(existing_user, serializer)
+                    if existing_user
+                    else serializer.save()
+                )
                 send_otp(user.email, "verify", "Verify your FitPro account")
         except Exception as exc:
             return Response(
@@ -115,10 +154,14 @@ class RegisterView(generics.CreateAPIView):
         headers = self.get_success_headers(serializer.data)
         return Response(
             {
-                "detail": "Registration successful. Verification code sent.",
+                "detail": (
+                    "Verification code sent."
+                    if existing_user
+                    else "Registration successful. Verification code sent."
+                ),
                 "email": user.email,
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK if existing_user else status.HTTP_201_CREATED,
             headers=headers,
         )
 

@@ -176,6 +176,9 @@ EMAIL_TIMEOUT       = 10
 EMAIL_HOST_USER     = env('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL  = env('DEFAULT_FROM_EMAIL')
+BREVO_API_KEY       = env('BREVO_API_KEY', default='')
+BREVO_SENDER_EMAIL  = env('BREVO_SENDER_EMAIL', default='')
+BREVO_SENDER_NAME   = env('BREVO_SENDER_NAME', default='FitPro')
 
 # Fallback to console if credentials not set yet
 if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:

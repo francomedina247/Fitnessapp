@@ -1,8 +1,11 @@
 import logging
+import json
 import random
 import string
 from datetime import timedelta
 from email.utils import parseaddr
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -56,22 +59,77 @@ def _resolve_from_email() -> str:
     return from_email
 
 
-def send_otp(email: str, cache_prefix: str, subject: str) -> str:
-    code = "".join(random.choices(string.digits, k=6))
-    from_email = _resolve_from_email()
+def _resolve_brevo_sender() -> tuple[str, str]:
+    fallback_from = _resolve_from_email()
+    fallback_name, fallback_email = parseaddr(fallback_from)
+    sender_email = getattr(settings, "BREVO_SENDER_EMAIL", "").strip() or fallback_email
+    sender_name = getattr(settings, "BREVO_SENDER_NAME", "").strip() or fallback_name or "FitPro"
 
-    try:
-        send_mail(
-            subject=subject,
-            message=(
+    if not sender_email:
+        raise ImproperlyConfigured("BREVO_SENDER_EMAIL or DEFAULT_FROM_EMAIL must be set.")
+
+    return sender_name, sender_email
+
+
+def _send_via_brevo_api(email: str, code: str, subject: str) -> None:
+    api_key = getattr(settings, "BREVO_API_KEY", "").strip()
+    if not api_key:
+        raise ImproperlyConfigured("BREVO_API_KEY is not configured.")
+
+    sender_name, sender_email = _resolve_brevo_sender()
+    payload = json.dumps(
+        {
+            "sender": {"name": sender_name, "email": sender_email},
+            "to": [{"email": email}],
+            "subject": subject,
+            "textContent": (
                 f"Your verification code is: {code}\n\n"
                 "This code expires in 10 minutes.\n"
                 "If you did not request this, please ignore this email."
             ),
-            from_email=from_email,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+        }
+    ).encode("utf-8")
+
+    req = urllib_request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        method="POST",
+        headers={
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json",
+        },
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=20) as response:
+            response.read()
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip() or exc.reason
+        raise Exception(f"Failed to send email via Brevo API: {detail}") from exc
+    except urllib_error.URLError as exc:
+        raise Exception(f"Failed to reach Brevo API: {exc.reason}") from exc
+
+
+def send_otp(email: str, cache_prefix: str, subject: str) -> str:
+    code = "".join(random.choices(string.digits, k=6))
+
+    try:
+        if getattr(settings, "BREVO_API_KEY", "").strip():
+            _send_via_brevo_api(email, code, subject)
+        else:
+            from_email = _resolve_from_email()
+            send_mail(
+                subject=subject,
+                message=(
+                    f"Your verification code is: {code}\n\n"
+                    "This code expires in 10 minutes.\n"
+                    "If you did not request this, please ignore this email."
+                ),
+                from_email=from_email,
+                recipient_list=[email],
+                fail_silently=False,
+            )
     except Exception as exc:
         raise Exception(f"Failed to send email: {exc}") from exc
 

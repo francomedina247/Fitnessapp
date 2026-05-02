@@ -1,4 +1,5 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
 from .models import Workout, Exercise, ProgressEntry, Measurement, PersonalRecord
 from .serializers import (
     WorkoutSerializer, ExerciseSerializer,
@@ -28,6 +29,12 @@ class WorkoutCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class WorkoutUpdateView(generics.UpdateAPIView):
     queryset           = Workout.objects.all()
@@ -41,6 +48,12 @@ class WorkoutUpdateView(generics.UpdateAPIView):
     def partial_update(self, request, *args, **kwargs):
         kwargs['partial'] = True
         return self.update(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class WorkoutDeleteView(generics.DestroyAPIView):

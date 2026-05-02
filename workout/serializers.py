@@ -8,8 +8,9 @@ class WorkoutSerializer(serializers.ModelSerializer):
     instructions = serializers.JSONField(required=False, default=list)
     rounds = serializers.IntegerField(required=False, default=1)
     round_duration_seconds = serializers.IntegerField(required=False, default=30)
-    duration = serializers.FloatField()
-    calories_burned = serializers.FloatField()
+    duration = serializers.IntegerField()
+    calories_burned = serializers.IntegerField()
+    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model  = Workout
@@ -26,6 +27,12 @@ class WorkoutSerializer(serializers.ModelSerializer):
         if value not in valid:
             return 'other'
         return value
+
+    def validate_duration(self, value):
+        return max(int(value), 1)
+
+    def validate_calories_burned(self, value):
+        return max(int(value), 1)
 
 
 class ExerciseSerializer(serializers.ModelSerializer):

@@ -59,8 +59,11 @@ class ExerciseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-        from user.views import maybe_send_streak_email
-        maybe_send_streak_email(self.request.user)
+        try:
+            from user.views import maybe_send_streak_email
+            maybe_send_streak_email(self.request.user)
+        except Exception:
+            pass
 
 
 class ExerciseUpdateView(generics.UpdateAPIView):
@@ -90,8 +93,11 @@ class ProgressListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         entry = serializer.save(user=self.request.user)
         if entry.weight:
-            from user.views import maybe_send_goal_email
-            maybe_send_goal_email(self.request.user, entry.weight)
+            try:
+                from user.views import maybe_send_goal_email
+                maybe_send_goal_email(self.request.user, entry.weight)
+            except Exception:
+                pass
 
 
 class ProgressUpdateView(generics.UpdateAPIView):

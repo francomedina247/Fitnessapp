@@ -1,9 +1,8 @@
+import logging
 import random
 import string
-import threading
 from datetime import timedelta
 from email.utils import parseaddr
-import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -80,35 +79,6 @@ def send_otp(email: str, cache_prefix: str, subject: str) -> str:
     return code
 
 
-def _send_otp_email(email: str, code: str, subject: str, from_email: str) -> None:
-    send_mail(
-        subject=subject,
-        message=(
-            f"Your verification code is: {code}\n\n"
-            "This code expires in 10 minutes.\n"
-            "If you did not request this, please ignore this email."
-        ),
-        from_email=from_email,
-        recipient_list=[email],
-        fail_silently=False,
-    )
-
-
-def queue_otp_email(email: str, cache_prefix: str, subject: str) -> str:
-    code = "".join(random.choices(string.digits, k=6))
-    from_email = _resolve_from_email()
-    cache.set(f"{cache_prefix}_{email}", code, timeout=600)
-
-    def _worker():
-        try:
-            _send_otp_email(email, code, subject, from_email)
-        except Exception:
-            logger.exception("Failed to send queued OTP email to %s", email)
-
-    threading.Thread(target=_worker, daemon=True).start()
-    return code
-
-
 class LoginView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -176,8 +146,9 @@ class RegisterView(generics.CreateAPIView):
                     if existing_user
                     else serializer.save()
                 )
-                queue_otp_email(user.email, "verify", "Verify your FitPro account")
+                send_otp(user.email, "verify", "Verify your FitPro account")
         except Exception as exc:
+            logger.exception("OTP send failed during registration for %s", email)
             return Response(
                 {"detail": str(exc)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

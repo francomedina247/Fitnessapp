@@ -22,7 +22,7 @@ class RegistrationOtpTests(APITestCase):
             "birthdate": "01/01/2000",
         }
 
-    @patch("user.views.queue_otp_email", side_effect=Exception("SMTP rejected sender"))
+    @patch("user.views.send_otp", side_effect=Exception("SMTP rejected sender"))
     def test_register_rolls_back_when_otp_send_fails(self, mocked_send_otp):
         response = self.client.post(self.register_url, self.payload, format="json")
 
@@ -30,7 +30,7 @@ class RegistrationOtpTests(APITestCase):
         self.assertFalse(User.objects.filter(email=self.payload["email"]).exists())
         mocked_send_otp.assert_called_once()
 
-    @patch("user.views.queue_otp_email", return_value="123456")
+    @patch("user.views.send_otp", return_value="123456")
     def test_register_creates_user_when_otp_send_succeeds(self, mocked_send_otp):
         response = self.client.post(self.register_url, self.payload, format="json")
 
@@ -42,7 +42,7 @@ class RegistrationOtpTests(APITestCase):
             "Verify your FitPro account",
         )
 
-    @patch("user.views.queue_otp_email", return_value="123456")
+    @patch("user.views.send_otp", return_value="123456")
     def test_register_reuses_unverified_user_and_resends_otp(self, mocked_send_otp):
         user = User.objects.create_user(
             email=self.payload["email"],
@@ -61,13 +61,14 @@ class RegistrationOtpTests(APITestCase):
         self.assertEqual(user.name, self.payload["name"])
         self.assertEqual(user.birthdate, self.payload["birthdate"])
         self.assertTrue(user.check_password(self.payload["password"]))
+        self.assertFalse(user.is_verified)
         mocked_send_otp.assert_called_once_with(
             self.payload["email"],
             "verify",
             "Verify your FitPro account",
         )
 
-    @patch("user.views.queue_otp_email", return_value="123456")
+    @patch("user.views.send_otp", return_value="123456")
     def test_register_rejects_existing_verified_user(self, mocked_send_otp):
         User.objects.create_user(
             email=self.payload["email"],

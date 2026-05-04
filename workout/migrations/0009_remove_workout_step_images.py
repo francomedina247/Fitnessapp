@@ -1,4 +1,4 @@
-from django.db import migrations
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
@@ -8,6 +8,12 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Set a default first so the column is not null-constrained during removal.
+        migrations.AlterField(
+            model_name='workout',
+            name='step_images',
+            field=models.JSONField(blank=True, default=list),
+        ),
         migrations.RemoveField(
             model_name='workout',
             name='step_images',
